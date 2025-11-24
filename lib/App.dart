@@ -15,9 +15,9 @@ class App extends StatelessWidget {
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.lightGreen),
       ),
-      home: const LoginPage(),
-      // home:
-      //     const FarmerStorePage(), // remove this line after testing or to access the farm store page directly
+      // home: const LoginPage(),
+      home:
+          const FarmerStorePage(), // remove this line after testing or to access the farm store page directly
       routes: {
         // Add any simple, argument-free routes here
         // '/message': (context) => const MessagePage(),

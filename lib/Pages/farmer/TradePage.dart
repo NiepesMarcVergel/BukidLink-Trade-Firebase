@@ -1,11 +1,51 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 import 'package:bukidlink/widgets/farmer/FarmerAppBar.dart';
 import 'package:bukidlink/widgets/farmer/FarmerBottomNavBar.dart';
 
 // Trade Page Main
-class TradePage extends StatelessWidget {
+class TradePage extends StatefulWidget {
+  @override
+  _TradePageState createState() => _TradePageState();
+}
+
+class _TradePageState extends State<TradePage> {
+  TextEditingController searchController = TextEditingController();
+  String searchText = '';
+
+  // Mock Trade Items
+  final List<Map<String, String>> tradeItems = [
+    {
+      'name': 'Tomato',
+      'image': 'assets/images/tomato.png',
+      'quantity': '3 kg',
+      'preferred': 'Grapes',
+    },
+    {
+      'name': 'Mango',
+      'image': 'assets/images/mango.png',
+      'quantity': '5 kg',
+      'preferred': 'Apples',
+    },
+    {
+      'name': 'Grapes',
+      'image': 'assets/images/grapes.png',
+      'quantity': '3 kg',
+      'preferred': 'Onions',
+    },
+  ];
+
   @override
   Widget build(BuildContext context) {
+    // Filtered list based on search
+    List<Map<String, String>> filteredItems = tradeItems
+        .where(
+          (item) =>
+              item['name']!.toLowerCase().contains(searchText.toLowerCase()),
+        )
+        .toList();
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: Column(
@@ -19,6 +59,12 @@ class TradePage extends StatelessWidget {
               children: [
                 Expanded(
                   child: TextField(
+                    controller: searchController,
+                    onChanged: (value) {
+                      setState(() {
+                        searchText = value;
+                      });
+                    },
                     decoration: InputDecoration(
                       hintText: 'Search...',
                       prefixIcon: Icon(Icons.search),
@@ -76,55 +122,45 @@ class TradePage extends StatelessWidget {
                         ),
                       ],
                     ),
-
                     SizedBox(height: 12),
 
-                    // Mock Trade Items
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TradeItemCard(
-                            name: 'Tomato',
-                            image: 'assets/images/tomato.png',
-                            quantity: '3 kg',
-                            preferred: 'Grapes',
-                          ),
+                    // Trade Items in rows of 2
+                    ...List.generate((filteredItems.length / 2).ceil(), (
+                      index,
+                    ) {
+                      int first = index * 2;
+                      int second = first + 1;
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 12.0),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: TradeItemCard(
+                                name: filteredItems[first]['name']!,
+                                image: filteredItems[first]['image']!,
+                                quantity: filteredItems[first]['quantity']!,
+                                preferred: filteredItems[first]['preferred']!,
+                              ),
+                            ),
+                            SizedBox(width: 12),
+                            if (second < filteredItems.length)
+                              Expanded(
+                                child: TradeItemCard(
+                                  name: filteredItems[second]['name']!,
+                                  image: filteredItems[second]['image']!,
+                                  quantity: filteredItems[second]['quantity']!,
+                                  preferred:
+                                      filteredItems[second]['preferred']!,
+                                ),
+                              )
+                            else
+                              Expanded(
+                                child: Container(),
+                              ), // empty for alignment
+                          ],
                         ),
-                        SizedBox(width: 12),
-                        Expanded(
-                          child: TradeItemCard(
-                            name: 'Mango',
-                            image: 'assets/images/mango.png',
-                            quantity: '5 kg',
-                            preferred: 'Apples',
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    SizedBox(height: 12),
-
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TradeItemCard(
-                            name: 'Grapes',
-                            image: 'assets/images/grapes.png',
-                            quantity: '3 kg',
-                            preferred: 'Onions',
-                          ),
-                        ),
-                        SizedBox(width: 12),
-                        Expanded(
-                          child: TradeItemCard(
-                            name: 'Tomato',
-                            image: 'assets/images/tomato.png',
-                            quantity: '3 kg',
-                            preferred: 'Grapes',
-                          ),
-                        ),
-                      ],
-                    ),
+                      );
+                    }),
                   ],
                 ),
               ),
@@ -169,7 +205,7 @@ class TradeCard extends StatelessWidget {
   }
 }
 
-//trade item cards for mock trade
+// Trade Item Card
 class TradeItemCard extends StatelessWidget {
   final String name;
   final String image;
@@ -199,7 +235,7 @@ class TradeItemCard extends StatelessWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         elevation: 3,
         child: Container(
-          width: 167,
+          width: double.infinity,
           height: 230,
           padding: EdgeInsets.all(8),
           child: Column(
@@ -224,7 +260,6 @@ class TradeItemCard extends StatelessWidget {
                 name,
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
-
               SizedBox(height: 4),
 
               // Quantity & Preferred
@@ -239,7 +274,15 @@ class TradeItemCard extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: () {},
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            TradeRequestPage(name: name, image: image),
+                      ),
+                    );
+                  },
                   child: Text('Offer a Trade'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Color(0xFFC3E956),
@@ -253,6 +296,129 @@ class TradeItemCard extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// Trade Request Page
+class TradeRequestPage extends StatefulWidget {
+  final String name;
+  final String image;
+
+  TradeRequestPage({required this.name, required this.image});
+
+  @override
+  _TradeRequestPageState createState() => _TradeRequestPageState();
+}
+
+class _TradeRequestPageState extends State<TradeRequestPage> {
+  final TextEditingController itemNameController = TextEditingController();
+  final TextEditingController itemQuantityController = TextEditingController();
+
+  XFile? _pickedImage;
+  final ImagePicker _picker = ImagePicker();
+
+  // Pick image from gallery
+  Future<void> _pickImage() async {
+    final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
+    if (pickedFile != null) {
+      setState(() {
+        _pickedImage = pickedFile;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        leading: BackButton(),
+        title: Center(
+          child: Text(
+            'Trade Request',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Item Name', style: TextStyle(fontWeight: FontWeight.bold)),
+            TextField(
+              controller: itemNameController,
+              decoration: InputDecoration(
+                hintText: 'Enter Item Name',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            SizedBox(height: 16),
+            Text(
+              'Item Quantity',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            TextField(
+              controller: itemQuantityController,
+              decoration: InputDecoration(
+                hintText: 'Enter Item Quantity',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            SizedBox(height: 16),
+            Text('Add Image', style: TextStyle(fontWeight: FontWeight.bold)),
+            SizedBox(height: 8),
+            GestureDetector(
+              onTap: _pickImage,
+              child: Container(
+                height: 150,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: _pickedImage == null
+                    ? Center(
+                        child: Icon(Icons.add, size: 40, color: Colors.grey),
+                      )
+                    : ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.file(
+                          File(_pickedImage!.path),
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+              ),
+            ),
+            Spacer(),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  // Example: show data in console or upload logic
+                  print('Item Name: ${itemNameController.text}');
+                  print('Quantity: ${itemQuantityController.text}');
+                  print('Image Path: ${_pickedImage?.path}');
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(SnackBar(content: Text('Trade Offer Sent!')));
+                },
+                child: Text('Offer'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Color(0xFFC3E956),
+                  foregroundColor: Colors.black,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  minimumSize: Size(double.infinity, 50),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -385,15 +551,23 @@ class OfferTradePage extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: () {},
-                  child: Text("Offer a Trade", style: TextStyle(fontSize: 16)),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            TradeRequestPage(name: name, image: image),
+                      ),
+                    );
+                  },
+                  child: Text('Offer a Trade'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Color(0xFFC3E956),
                     foregroundColor: Colors.black,
-                    minimumSize: Size(double.infinity, 50),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
+                    minimumSize: Size(double.infinity, 40),
                   ),
                 ),
               ),
@@ -408,7 +582,44 @@ class OfferTradePage extends StatelessWidget {
 }
 
 //Make Trade Page
-class MakeTradePage extends StatelessWidget {
+
+class MakeTradePage extends StatefulWidget {
+  @override
+  _MakeTradePageState createState() => _MakeTradePageState();
+}
+
+class _MakeTradePageState extends State<MakeTradePage> {
+  File? _image;
+  final picker = ImagePicker();
+
+  final TextEditingController _itemNameController = TextEditingController();
+  final TextEditingController _itemQuantityController = TextEditingController();
+  final TextEditingController _preferredTradeController =
+      TextEditingController();
+
+  List<String> _preferredTrades = [];
+
+  // Pick image from gallery
+  Future<void> _pickImage() async {
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+    if (pickedFile != null) {
+      setState(() {
+        _image = File(pickedFile.path);
+      });
+    }
+  }
+
+  // Add preferred trade to the list
+  void _addPreferredTrade() {
+    final trade = _preferredTradeController.text.trim();
+    if (trade.isNotEmpty) {
+      setState(() {
+        _preferredTrades.add(trade);
+        _preferredTradeController.clear();
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -434,6 +645,7 @@ class MakeTradePage extends StatelessWidget {
               ),
               SizedBox(height: 12),
               TextField(
+                controller: _itemNameController,
                 decoration: InputDecoration(
                   labelText: 'Enter Item Name',
                   border: OutlineInputBorder(
@@ -443,6 +655,7 @@ class MakeTradePage extends StatelessWidget {
               ),
               SizedBox(height: 12),
               TextField(
+                controller: _itemQuantityController,
                 decoration: InputDecoration(
                   labelText: 'Enter Item Quantity',
                   border: OutlineInputBorder(
@@ -453,14 +666,22 @@ class MakeTradePage extends StatelessWidget {
               SizedBox(height: 12),
               Text('Add Image:', style: TextStyle(fontWeight: FontWeight.bold)),
               SizedBox(height: 8),
-              Container(
-                height: 120,
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Center(
-                  child: Icon(Icons.add, size: 40, color: Colors.grey),
+              GestureDetector(
+                onTap: _pickImage,
+                child: Container(
+                  height: 120,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: _image == null
+                      ? Center(
+                          child: Icon(Icons.add, size: 40, color: Colors.grey),
+                        )
+                      : ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.file(_image!, fit: BoxFit.cover),
+                        ),
                 ),
               ),
               SizedBox(height: 16),
@@ -473,6 +694,7 @@ class MakeTradePage extends StatelessWidget {
                 children: [
                   Expanded(
                     child: TextField(
+                      controller: _preferredTradeController,
                       decoration: InputDecoration(
                         hintText: 'Add preferred trade',
                         border: OutlineInputBorder(
@@ -483,7 +705,7 @@ class MakeTradePage extends StatelessWidget {
                   ),
                   SizedBox(width: 8),
                   ElevatedButton(
-                    onPressed: () {},
+                    onPressed: _addPreferredTrade,
                     child: Icon(Icons.add),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.green,
@@ -495,10 +717,34 @@ class MakeTradePage extends StatelessWidget {
                   ),
                 ],
               ),
+              SizedBox(height: 12),
+              // Display list of preferred trades
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _preferredTrades
+                    .map(
+                      (trade) => Chip(
+                        label: Text(trade),
+                        onDeleted: () {
+                          setState(() {
+                            _preferredTrades.remove(trade);
+                          });
+                        },
+                      ),
+                    )
+                    .toList(),
+              ),
               SizedBox(height: 24),
               Center(
                 child: ElevatedButton(
-                  onPressed: () {},
+                  onPressed: () {
+                    // Handle trade posting here
+                    print('Item Name: ${_itemNameController.text}');
+                    print('Quantity: ${_itemQuantityController.text}');
+                    print('Preferred Trades: $_preferredTrades');
+                    print('Image Path: ${_image?.path}');
+                  },
                   child: Text('Post Trade Request'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Color(0xFFC3E956),
@@ -519,9 +765,14 @@ class MakeTradePage extends StatelessWidget {
 }
 
 // My Trades Page
-class MyTradesPage extends StatelessWidget {
-  // Mock trade data for now
-  final List<Map<String, dynamic>> trades = [
+class MyTradesPage extends StatefulWidget {
+  @override
+  _MyTradesPageState createState() => _MyTradesPageState();
+}
+
+class _MyTradesPageState extends State<MyTradesPage> {
+  // Mock trade data
+  final List<Map<String, dynamic>> allTrades = [
     {
       'name': 'Tomato',
       'image': 'assets/images/tomato.png',
@@ -545,6 +796,31 @@ class MyTradesPage extends StatelessWidget {
     },
   ];
 
+  List<Map<String, dynamic>> filteredTrades = [];
+  final TextEditingController searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    filteredTrades = allTrades;
+    searchController.addListener(_filterTrades);
+  }
+
+  void _filterTrades() {
+    final query = searchController.text.toLowerCase();
+    setState(() {
+      filteredTrades = allTrades
+          .where((trade) => trade['name'].toLowerCase().contains(query))
+          .toList();
+    });
+  }
+
+  @override
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -565,8 +841,9 @@ class MyTradesPage extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.all(12.0),
             child: TextField(
+              controller: searchController,
               decoration: InputDecoration(
-                hintText: 'Search...',
+                hintText: 'Search by item name...',
                 prefixIcon: Icon(Icons.search),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -580,7 +857,7 @@ class MyTradesPage extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.all(12.0),
                 child: Column(
-                  children: List.generate((trades.length / 2).ceil(), (
+                  children: List.generate((filteredTrades.length / 2).ceil(), (
                     rowIndex,
                   ) {
                     final int firstIndex = rowIndex * 2;
@@ -590,15 +867,19 @@ class MyTradesPage extends StatelessWidget {
                       child: Row(
                         children: [
                           // First card
-                          if (firstIndex < trades.length)
+                          if (firstIndex < filteredTrades.length)
                             Expanded(
-                              child: MyTradeCard(trade: trades[firstIndex]),
+                              child: MyTradeCard(
+                                trade: filteredTrades[firstIndex],
+                              ),
                             ),
                           SizedBox(width: 12),
                           // Second card
-                          if (secondIndex < trades.length)
+                          if (secondIndex < filteredTrades.length)
                             Expanded(
-                              child: MyTradeCard(trade: trades[secondIndex]),
+                              child: MyTradeCard(
+                                trade: filteredTrades[secondIndex],
+                              ),
                             )
                           else
                             Expanded(child: Container()), // Empty space
