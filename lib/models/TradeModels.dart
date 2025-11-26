@@ -4,10 +4,10 @@ class TradeListing {
   final String id;
   final String name;
   final String quantity;
-  final String description; // <--- NEW FIELD
+  final String description;
   final List<String> preferredTrades;
   final String image;
-  final String userId;
+  final String farmerId; // <--- CHANGED from userId to farmerId
   final int offersCount;
   final DateTime createdAt;
 
@@ -15,10 +15,10 @@ class TradeListing {
     required this.id,
     required this.name,
     required this.quantity,
-    required this.description, // <--- Add to constructor
+    required this.description,
     required this.preferredTrades,
     required this.image,
-    required this.userId,
+    required this.farmerId, // <--- CHANGED
     required this.offersCount,
     required this.createdAt,
   });
@@ -28,10 +28,10 @@ class TradeListing {
       id: docId,
       name: data['name'] ?? '',
       quantity: data['quantity'] ?? '',
-      description: data['description'] ?? '', // <--- Read from Firestore
+      description: data['description'] ?? '',
       preferredTrades: List<String>.from(data['preferred_trades'] ?? []),
       image: data['image'] ?? '',
-      userId: data['user_id'] ?? '',
+      farmerId: data['farmer_id'] ?? '', // <--- Map from 'farmer_id'
       offersCount: data['offers_count'] ?? 0,
       createdAt: (data['created_at'] is Timestamp)
           ? (data['created_at'] as Timestamp).toDate()
@@ -43,10 +43,10 @@ class TradeListing {
     return {
       'name': name,
       'quantity': quantity,
-      'description': description, // <--- Write to Firestore
+      'description': description,
       'preferred_trades': preferredTrades,
       'image': image,
-      'user_id': userId,
+      'farmer_id': farmerId, // <--- Save as 'farmer_id'
       'offers_count': offersCount,
       'created_at': FieldValue.serverTimestamp(),
     };

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:io';
 import '../../services/TradeService.dart';
 import '../../models/TradeModels.dart';
+import 'MakeTradePage.dart'; // Required for Edit Navigation
 
 class MyTradesPage extends StatefulWidget {
   @override
@@ -194,12 +195,42 @@ class MyTradeItemCard extends StatelessWidget {
   }
 }
 
-// --- Page: View Incoming Offers for a specific Listing ---
+// --- Page: View Incoming Offers for a specific Listing + EDIT/DELETE ---
 class TradeIncomingOffersPage extends StatelessWidget {
   final TradeListing listing;
-  final TradeService _tradeService = TradeService(); // This is now used below!
+  final TradeService _tradeService = TradeService();
 
   TradeIncomingOffersPage({required this.listing});
+
+  // --- Helper: Delete Dialog ---
+  void _confirmDelete(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text("Delete Trade?"),
+        content: Text(
+          "Are you sure you want to delete this listing? This action cannot be undone.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx); // Close dialog
+              await _tradeService.deleteListing(listing.id);
+              Navigator.pop(context); // Go back to My Trades list
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text("Trade deleted.")));
+            },
+            child: Text("Delete", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -214,10 +245,50 @@ class TradeIncomingOffersPage extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Trade Offers', style: TextStyle(color: Colors.black)),
+        title: Text('Trade Details', style: TextStyle(color: Colors.black)),
         backgroundColor: Colors.white,
         elevation: 0,
         iconTheme: IconThemeData(color: Colors.black),
+        actions: [
+          // --- EDIT / DELETE MENU ---
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              if (value == 'edit') {
+                // Navigate to MakeTradePage in Edit Mode
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => MakeTradePage(listing: listing),
+                  ),
+                );
+              } else if (value == 'delete') {
+                _confirmDelete(context);
+              }
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'edit',
+                child: Row(
+                  children: [
+                    Icon(Icons.edit, color: Colors.blue),
+                    SizedBox(width: 8),
+                    Text("Edit"),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'delete',
+                child: Row(
+                  children: [
+                    Icon(Icons.delete, color: Colors.red),
+                    SizedBox(width: 8),
+                    Text("Delete"),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
       backgroundColor: Colors.white,
       body: SingleChildScrollView(
@@ -269,6 +340,18 @@ class TradeIncomingOffersPage extends StatelessWidget {
                             listing.quantity,
                             style: TextStyle(color: Colors.white70),
                           ),
+                          // Show Description here too
+                          SizedBox(height: 4),
+                          Text(
+                            listing.description,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontStyle: FontStyle.italic,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ],
                       ),
                     ),
@@ -282,11 +365,9 @@ class TradeIncomingOffersPage extends StatelessWidget {
               ),
               SizedBox(height: 12),
 
-              // Offers List - FIXED: Uses _tradeService now
+              // Offers List
               StreamBuilder<List<TradeOfferRequest>>(
-                stream: _tradeService.getOffersForListing(
-                  listing.id,
-                ), // <--- Used here
+                stream: _tradeService.getOffersForListing(listing.id),
                 builder: (context, snapshot) {
                   if (snapshot.hasError) return Text("Error loading offers");
                   if (snapshot.connectionState == ConnectionState.waiting)
@@ -302,7 +383,6 @@ class TradeIncomingOffersPage extends StatelessWidget {
 
                   return Column(
                     children: offers.map((offer) {
-                      // Service already converted data to TradeOfferRequest model
                       return _OfferTile(offer: offer);
                     }).toList(),
                   );
