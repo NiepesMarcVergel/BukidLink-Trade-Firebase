@@ -3,6 +3,70 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:bukidlink/widgets/farmer/FarmerAppBar.dart';
 import 'package:bukidlink/widgets/farmer/FarmerBottomNavBar.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
+// =========================================================
+//  TESTING TOGGLE - testing123
+// =========================================================
+const bool isTesting = false; // testing123: Change to false to use Firebase
+
+// =========================================================
+//  MOCK DATA (Hardcoded for testing)
+// =========================================================
+final List<Map<String, dynamic>> mockListings = [
+  {
+    'id': '1',
+    'name': 'Sack of Rice (Sinandomeng)',
+    'quantity': '2 Sacks',
+    'preferred_trades': ['Vegetables', 'Native Chicken'],
+    'image': 'assets/images/sample_rice.png', // sample images muna
+    'user_id': 'test_user_uid',
+    'offers_count': 5,
+    'created_at': DateTime.now(),
+  },
+  {
+    'id': '2',
+    'name': 'Fresh Tilapia',
+    'quantity': '5 Kilos',
+    'preferred_trades': ['Fruits', 'Fertilizer'],
+    'image': '',
+    'user_id': 'other_user',
+    'offers_count': 1,
+    'created_at': DateTime.now(),
+  },
+  {
+    'id': '3',
+    'name': 'Organic Fertilizer',
+    'quantity': '10 Bags',
+    'preferred_trades': ['Seeds', 'Tools'],
+    'image': '',
+    'user_id': 'test_user_uid', // Same as "Me" for MyTrades test
+    'offers_count': 0,
+    'created_at': DateTime.now(),
+  },
+];
+
+final List<Map<String, dynamic>> mockOffers = [
+  {
+    'item_name': 'Native Chicken',
+    'item_quantity': '3 Heads',
+    'offered_by_name': 'Juan Dela Cruz',
+    'image_path': '',
+    'status': 'pending',
+  },
+  {
+    'item_name': 'String Beans',
+    'item_quantity': '5 Bundles',
+    'offered_by_name': 'Maria Clara',
+    'image_path': '',
+    'status': 'pending',
+  },
+];
+
+// =========================================================
+//  MAIN APP CODE
+// =========================================================
 
 // Trade Page Main
 class TradePage extends StatefulWidget {
@@ -14,38 +78,8 @@ class _TradePageState extends State<TradePage> {
   TextEditingController searchController = TextEditingController();
   String searchText = '';
 
-  // Mock Trade Items
-  final List<Map<String, String>> tradeItems = [
-    {
-      'name': 'Tomato',
-      'image': 'assets/images/tomato.png',
-      'quantity': '3 kg',
-      'preferred': 'Grapes',
-    },
-    {
-      'name': 'Mango',
-      'image': 'assets/images/mango.png',
-      'quantity': '5 kg',
-      'preferred': 'Apples',
-    },
-    {
-      'name': 'Grapes',
-      'image': 'assets/images/grapes.png',
-      'quantity': '3 kg',
-      'preferred': 'Onions',
-    },
-  ];
-
   @override
   Widget build(BuildContext context) {
-    // Filtered list based on search
-    List<Map<String, String>> filteredItems = tradeItems
-        .where(
-          (item) =>
-              item['name']!.toLowerCase().contains(searchText.toLowerCase()),
-        )
-        .toList();
-
     return Scaffold(
       backgroundColor: Colors.white,
       body: Column(
@@ -124,43 +158,10 @@ class _TradePageState extends State<TradePage> {
                     ),
                     SizedBox(height: 12),
 
-                    // Trade Items in rows of 2
-                    ...List.generate((filteredItems.length / 2).ceil(), (
-                      index,
-                    ) {
-                      int first = index * 2;
-                      int second = first + 1;
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 12.0),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: TradeItemCard(
-                                name: filteredItems[first]['name']!,
-                                image: filteredItems[first]['image']!,
-                                quantity: filteredItems[first]['quantity']!,
-                                preferred: filteredItems[first]['preferred']!,
-                              ),
-                            ),
-                            SizedBox(width: 12),
-                            if (second < filteredItems.length)
-                              Expanded(
-                                child: TradeItemCard(
-                                  name: filteredItems[second]['name']!,
-                                  image: filteredItems[second]['image']!,
-                                  quantity: filteredItems[second]['quantity']!,
-                                  preferred:
-                                      filteredItems[second]['preferred']!,
-                                ),
-                              )
-                            else
-                              Expanded(
-                                child: Container(),
-                              ), // empty for alignment
-                          ],
-                        ),
-                      );
-                    }),
+                    // LIST BUILDER (Switches between Real and Test)
+                    isTesting
+                        ? _buildMockList() // testing123
+                        : _buildFirestoreList(), // Real Firebase
                   ],
                 ),
               ),
@@ -169,6 +170,147 @@ class _TradePageState extends State<TradePage> {
         ],
       ),
       bottomNavigationBar: const FarmerBottomNavBar(currentIndex: 1),
+    );
+  }
+
+  // --- Widget for Testing Mode ---
+  Widget _buildMockList() {
+    var docs = mockListings.where((data) {
+      String name = data['name'] ?? '';
+      return name.toLowerCase().contains(searchText.toLowerCase());
+    }).toList();
+
+    if (docs.isEmpty) return Center(child: Text("No mock trades found."));
+
+    return Column(
+      children: List.generate((docs.length / 2).ceil(), (index) {
+        int first = index * 2;
+        int second = first + 1;
+        var firstData = docs[first];
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12.0),
+          child: Row(
+            children: [
+              Expanded(
+                child: TradeItemCard(
+                  docId: firstData['id'],
+                  name: firstData['name'],
+                  image: firstData['image'],
+                  quantity: firstData['quantity'],
+                  preferred:
+                      (firstData['preferred_trades'] as List?)?.join(', ') ??
+                      'Any',
+                ),
+              ),
+              SizedBox(width: 12),
+              if (second < docs.length)
+                Expanded(
+                  child: TradeItemCard(
+                    docId: docs[second]['id'],
+                    name: docs[second]['name'],
+                    image: docs[second]['image'],
+                    quantity: docs[second]['quantity'],
+                    preferred:
+                        (docs[second]['preferred_trades'] as List?)?.join(
+                          ', ',
+                        ) ??
+                        'Any',
+                  ),
+                )
+              else
+                Expanded(child: Container()),
+            ],
+          ),
+        );
+      }),
+    );
+  }
+
+  // --- Widget for Real Firestore ---
+  Widget _buildFirestoreList() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('trade_listings')
+          .orderBy('created_at', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(child: Text('Error loading trades'));
+        }
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Center(child: CircularProgressIndicator());
+        }
+
+        var docs = snapshot.data!.docs.where((doc) {
+          var data = doc.data() as Map<String, dynamic>;
+          String name = data['name'] ?? '';
+          return name.toLowerCase().contains(searchText.toLowerCase());
+        }).toList();
+
+        if (docs.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Text("No trades found."),
+            ),
+          );
+        }
+
+        return Column(
+          children: List.generate((docs.length / 2).ceil(), (index) {
+            int first = index * 2;
+            int second = first + 1;
+
+            var firstData = docs[first].data() as Map<String, dynamic>;
+            var firstId = docs[first].id;
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12.0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TradeItemCard(
+                      docId: firstId,
+                      name: firstData['name'] ?? 'Unknown',
+                      image: firstData['image'] ?? '',
+                      quantity: firstData['quantity'] ?? '',
+                      preferred:
+                          (firstData['preferred_trades'] as List<dynamic>?)
+                              ?.join(', ') ??
+                          'Any',
+                    ),
+                  ),
+                  SizedBox(width: 12),
+                  if (second < docs.length)
+                    Expanded(
+                      child: Builder(
+                        builder: (context) {
+                          var secondData =
+                              docs[second].data() as Map<String, dynamic>;
+                          var secondId = docs[second].id;
+                          return TradeItemCard(
+                            docId: secondId,
+                            name: secondData['name'] ?? 'Unknown',
+                            image: secondData['image'] ?? '',
+                            quantity: secondData['quantity'] ?? '',
+                            preferred:
+                                (secondData['preferred_trades']
+                                        as List<dynamic>?)
+                                    ?.join(', ') ??
+                                'Any',
+                          );
+                        },
+                      ),
+                    )
+                  else
+                    Expanded(child: Container()),
+                ],
+              ),
+            );
+          }),
+        );
+      },
     );
   }
 }
@@ -207,12 +349,14 @@ class TradeCard extends StatelessWidget {
 
 // Trade Item Card
 class TradeItemCard extends StatelessWidget {
+  final String docId;
   final String name;
   final String image;
   final String quantity;
   final String preferred;
 
   const TradeItemCard({
+    required this.docId,
     required this.name,
     required this.image,
     required this.quantity,
@@ -221,13 +365,27 @@ class TradeItemCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    ImageProvider getImageProvider() {
+      if (image.startsWith('assets/')) {
+        return AssetImage(image);
+      } else if (image.isNotEmpty) {
+        return FileImage(File(image));
+      }
+      return AssetImage('assets/images/default_cover_photo.png');
+    }
+
     return GestureDetector(
       onTap: () {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) =>
-                OfferTradePage(name: name, image: image, quantity: quantity),
+            builder: (_) => OfferTradePage(
+              docId: docId,
+              name: name,
+              image: image,
+              quantity: quantity,
+              preferred: preferred,
+            ),
           ),
         );
       },
@@ -236,41 +394,39 @@ class TradeItemCard extends StatelessWidget {
         elevation: 3,
         child: Container(
           width: double.infinity,
-          height: 230,
+          height: 260,
           padding: EdgeInsets.all(8),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Image
               Container(
                 height: 120,
                 width: double.infinity,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
                   image: DecorationImage(
-                    image: AssetImage(image),
+                    image: getImageProvider(),
                     fit: BoxFit.cover,
+                    onError: (exception, stackTrace) =>
+                        AssetImage('assets/images/default_cover_photo.png'),
                   ),
                 ),
               ),
               SizedBox(height: 8),
-
-              // Name
               Text(
                 name,
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
               SizedBox(height: 4),
-
-              // Quantity & Preferred
               Text(
-                '$quantity, Preferred: $preferred',
+                '$quantity\nPreferred: $preferred',
                 style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
-
               Spacer(),
-
-              // Offer a Trade Button
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -278,8 +434,10 @@ class TradeItemCard extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) =>
-                            TradeRequestPage(name: name, image: image),
+                        builder: (_) => TradeRequestPage(
+                          listingId: docId,
+                          listingName: name,
+                        ),
                       ),
                     );
                   },
@@ -302,12 +460,12 @@ class TradeItemCard extends StatelessWidget {
   }
 }
 
-// Trade Request Page
+// Trade Request Page (The page where you make an offer)
 class TradeRequestPage extends StatefulWidget {
-  final String name;
-  final String image;
+  final String listingId;
+  final String listingName;
 
-  TradeRequestPage({required this.name, required this.image});
+  TradeRequestPage({required this.listingId, required this.listingName});
 
   @override
   _TradeRequestPageState createState() => _TradeRequestPageState();
@@ -316,17 +474,74 @@ class TradeRequestPage extends StatefulWidget {
 class _TradeRequestPageState extends State<TradeRequestPage> {
   final TextEditingController itemNameController = TextEditingController();
   final TextEditingController itemQuantityController = TextEditingController();
+  bool _isLoading = false;
 
   XFile? _pickedImage;
   final ImagePicker _picker = ImagePicker();
 
-  // Pick image from gallery
   Future<void> _pickImage() async {
     final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
     if (pickedFile != null) {
       setState(() {
         _pickedImage = pickedFile;
       });
+    }
+  }
+
+  Future<void> _submitOffer() async {
+    if (itemNameController.text.isEmpty ||
+        itemQuantityController.text.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Please fill in all fields')));
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // --- TESTING LOGIC --- // testing123
+      if (isTesting) {
+        await Future.delayed(Duration(seconds: 1)); // Simulate network delay
+        print("TESTING: Offer Submitted to mock DB");
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('TESTING: Trade Offer Sent!')));
+        Navigator.pop(context);
+        return;
+      }
+      // ---------------------
+
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) throw Exception("User not logged in");
+
+      await FirebaseFirestore.instance.collection('trade_offers').add({
+        'listing_id': widget.listingId,
+        'offered_by_uid': user.uid,
+        'offered_by_name': user.displayName ?? 'Anonymous',
+        'item_name': itemNameController.text,
+        'item_quantity': itemQuantityController.text,
+        'image_path': _pickedImage?.path ?? '',
+        'status': 'pending',
+        'created_at': FieldValue.serverTimestamp(),
+      });
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Trade Offer Sent!')));
+      Navigator.pop(context);
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error sending offer: $e')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -339,8 +554,8 @@ class _TradeRequestPageState extends State<TradeRequestPage> {
         leading: BackButton(),
         title: Center(
           child: Text(
-            'Trade Request',
-            style: TextStyle(fontWeight: FontWeight.bold),
+            'Trade Offer for ${widget.listingName}',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
           ),
         ),
       ),
@@ -349,7 +564,10 @@ class _TradeRequestPageState extends State<TradeRequestPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Item Name', style: TextStyle(fontWeight: FontWeight.bold)),
+            Text(
+              'Your Item Name',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
             TextField(
               controller: itemNameController,
               decoration: InputDecoration(
@@ -359,7 +577,7 @@ class _TradeRequestPageState extends State<TradeRequestPage> {
             ),
             SizedBox(height: 16),
             Text(
-              'Item Quantity',
+              'Your Item Quantity',
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
             TextField(
@@ -398,16 +616,10 @@ class _TradeRequestPageState extends State<TradeRequestPage> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: () {
-                  // Example: show data in console or upload logic
-                  print('Item Name: ${itemNameController.text}');
-                  print('Quantity: ${itemQuantityController.text}');
-                  print('Image Path: ${_pickedImage?.path}');
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(SnackBar(content: Text('Trade Offer Sent!')));
-                },
-                child: Text('Offer'),
+                onPressed: _isLoading ? null : _submitOffer,
+                child: _isLoading
+                    ? CircularProgressIndicator(color: Colors.black)
+                    : Text('Offer'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Color(0xFFC3E956),
                   foregroundColor: Colors.black,
@@ -425,25 +637,32 @@ class _TradeRequestPageState extends State<TradeRequestPage> {
   }
 }
 
-// Offer a Trade Page Mock Page for now, extension from Trade Page Main
-
+// Offer a Trade Page (Detail View of item you want to trade for)
 class OfferTradePage extends StatelessWidget {
+  final String docId;
   final String name;
   final String image;
   final String quantity;
+  final String preferred;
 
   OfferTradePage({
+    required this.docId,
     required this.name,
     required this.image,
     required this.quantity,
+    required this.preferred,
   });
 
   @override
   Widget build(BuildContext context) {
+    ImageProvider getImageProvider() {
+      if (image.startsWith('assets/')) return AssetImage(image);
+      if (image.isNotEmpty) return FileImage(File(image));
+      return AssetImage('assets/images/default_cover_photo.png');
+    }
+
     return Scaffold(
       backgroundColor: Colors.white,
-
-      // Top AppBar
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
@@ -454,15 +673,12 @@ class OfferTradePage extends StatelessWidget {
         title: Text("Offer a Trade", style: TextStyle(color: Colors.black)),
         centerTitle: true,
       ),
-
-      // Body
       body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Gradient Box + Image
               Container(
                 width: double.infinity,
                 padding: EdgeInsets.all(20),
@@ -474,33 +690,33 @@ class OfferTradePage extends StatelessWidget {
                   ),
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: Column(children: [Image.asset(image, height: 140)]),
+                child: Column(
+                  children: [
+                    Container(
+                      height: 140,
+                      decoration: BoxDecoration(
+                        image: DecorationImage(
+                          image: getImageProvider(),
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-
               SizedBox(height: 16),
-
-              // Category
               Text(
-                "Fruit",
+                "Item",
                 style: TextStyle(fontSize: 16, color: Colors.grey[700]),
               ),
-
               SizedBox(height: 4),
-
-              // Name
               Text(
                 name,
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
               ),
-
               SizedBox(height: 4),
-
-              // Quantity
               Text(quantity, style: TextStyle(fontSize: 16)),
-
               SizedBox(height: 20),
-
-              // Product Details
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
@@ -508,21 +724,15 @@ class OfferTradePage extends StatelessWidget {
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
               ),
-
               SizedBox(height: 6),
-
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  "Picked at the peak of ripeness, our fresh red tomatoes bring natural sweetness. "
-                  "Bursting with juice, they're perfect for salad.",
+                  "This item is available for trade.",
                   style: TextStyle(fontSize: 15),
                 ),
               ),
-
               SizedBox(height: 20),
-
-              // Preferred Trades
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
@@ -530,24 +740,12 @@ class OfferTradePage extends StatelessWidget {
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
               ),
-
               SizedBox(height: 6),
-
               Align(
                 alignment: Alignment.centerLeft,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text("• Grapes"),
-                    Text("• Apples"),
-                    Text("• Sitaw"),
-                  ],
-                ),
+                child: Text(preferred, style: TextStyle(fontSize: 15)),
               ),
-
               SizedBox(height: 30),
-
-              // Offer a Trade Button
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -555,8 +753,10 @@ class OfferTradePage extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) =>
-                            TradeRequestPage(name: name, image: image),
+                        builder: (_) => TradeRequestPage(
+                          listingId: docId,
+                          listingName: name,
+                        ),
                       ),
                     );
                   },
@@ -571,7 +771,6 @@ class OfferTradePage extends StatelessWidget {
                   ),
                 ),
               ),
-
               SizedBox(height: 40),
             ],
           ),
@@ -581,8 +780,7 @@ class OfferTradePage extends StatelessWidget {
   }
 }
 
-//Make Trade Page
-
+// Make Trade Page (Create a new listing)
 class MakeTradePage extends StatefulWidget {
   @override
   _MakeTradePageState createState() => _MakeTradePageState();
@@ -598,8 +796,8 @@ class _MakeTradePageState extends State<MakeTradePage> {
       TextEditingController();
 
   List<String> _preferredTrades = [];
+  bool _isLoading = false;
 
-  // Pick image from gallery
   Future<void> _pickImage() async {
     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
     if (pickedFile != null) {
@@ -609,7 +807,6 @@ class _MakeTradePageState extends State<MakeTradePage> {
     }
   }
 
-  // Add preferred trade to the list
   void _addPreferredTrade() {
     final trade = _preferredTradeController.text.trim();
     if (trade.isNotEmpty) {
@@ -617,6 +814,62 @@ class _MakeTradePageState extends State<MakeTradePage> {
         _preferredTrades.add(trade);
         _preferredTradeController.clear();
       });
+    }
+  }
+
+  Future<void> _postTradeRequest() async {
+    if (_itemNameController.text.isEmpty ||
+        _itemQuantityController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Please provide name and quantity')),
+      );
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // --- TESTING LOGIC --- // testing123
+      if (isTesting) {
+        await Future.delayed(Duration(seconds: 1)); // Simulate network
+        print("TESTING: New Trade Posted to mock DB");
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('TESTING: Trade Posted Successfully!')),
+        );
+        Navigator.pop(context);
+        return;
+      }
+      // ---------------------
+
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) throw Exception('User not logged in');
+
+      await FirebaseFirestore.instance.collection('trade_listings').add({
+        'name': _itemNameController.text,
+        'quantity': _itemQuantityController.text,
+        'preferred_trades': _preferredTrades,
+        'image': _image?.path ?? '',
+        'user_id': user.uid,
+        'created_at': FieldValue.serverTimestamp(),
+        'offers_count': 0,
+      });
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Trade Posted Successfully!')));
+      Navigator.pop(context);
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error posting trade: $e')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -718,7 +971,6 @@ class _MakeTradePageState extends State<MakeTradePage> {
                 ],
               ),
               SizedBox(height: 12),
-              // Display list of preferred trades
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -738,14 +990,10 @@ class _MakeTradePageState extends State<MakeTradePage> {
               SizedBox(height: 24),
               Center(
                 child: ElevatedButton(
-                  onPressed: () {
-                    // Handle trade posting here
-                    print('Item Name: ${_itemNameController.text}');
-                    print('Quantity: ${_itemQuantityController.text}');
-                    print('Preferred Trades: $_preferredTrades');
-                    print('Image Path: ${_image?.path}');
-                  },
-                  child: Text('Post Trade Request'),
+                  onPressed: _isLoading ? null : _postTradeRequest,
+                  child: _isLoading
+                      ? CircularProgressIndicator(color: Colors.black)
+                      : Text('Post Trade Request'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Color(0xFFC3E956),
                     foregroundColor: Colors.black,
@@ -771,58 +1019,16 @@ class MyTradesPage extends StatefulWidget {
 }
 
 class _MyTradesPageState extends State<MyTradesPage> {
-  // Mock trade data
-  final List<Map<String, dynamic>> allTrades = [
-    {
-      'name': 'Tomato',
-      'image': 'assets/images/tomato.png',
-      'quantity': '3 kg',
-      'preferred': 'Grapes',
-      'offers': 5,
-    },
-    {
-      'name': 'Mango',
-      'image': 'assets/images/mango.png',
-      'quantity': '5 kg',
-      'preferred': 'Apples',
-      'offers': 3,
-    },
-    {
-      'name': 'Grapes',
-      'image': 'assets/images/grapes.png',
-      'quantity': '3 kg',
-      'preferred': 'Onions',
-      'offers': 0,
-    },
-  ];
-
-  List<Map<String, dynamic>> filteredTrades = [];
-  final TextEditingController searchController = TextEditingController();
-
-  @override
-  void initState() {
-    super.initState();
-    filteredTrades = allTrades;
-    searchController.addListener(_filterTrades);
-  }
-
-  void _filterTrades() {
-    final query = searchController.text.toLowerCase();
-    setState(() {
-      filteredTrades = allTrades
-          .where((trade) => trade['name'].toLowerCase().contains(query))
-          .toList();
-    });
-  }
-
-  @override
-  void dispose() {
-    searchController.dispose();
-    super.dispose();
-  }
+  TextEditingController searchController = TextEditingController();
+  String searchText = '';
 
   @override
   Widget build(BuildContext context) {
+    User? user;
+    if (!isTesting) {
+      user = FirebaseAuth.instance.currentUser;
+    }
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -835,64 +1041,135 @@ class _MyTradesPageState extends State<MyTradesPage> {
         title: Text('My Trades', style: TextStyle(color: Colors.black)),
         centerTitle: true,
       ),
-      body: Column(
-        children: [
-          // Search bar
-          Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: TextField(
-              controller: searchController,
-              decoration: InputDecoration(
-                hintText: 'Search by item name...',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
-          ),
-          // Scrollable cards
-          Expanded(
-            child: SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.all(12.0),
-                child: Column(
-                  children: List.generate((filteredTrades.length / 2).ceil(), (
-                    rowIndex,
-                  ) {
-                    final int firstIndex = rowIndex * 2;
-                    final int secondIndex = firstIndex + 1;
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 12.0),
-                      child: Row(
-                        children: [
-                          // First card
-                          if (firstIndex < filteredTrades.length)
-                            Expanded(
-                              child: MyTradeCard(
-                                trade: filteredTrades[firstIndex],
-                              ),
-                            ),
-                          SizedBox(width: 12),
-                          // Second card
-                          if (secondIndex < filteredTrades.length)
-                            Expanded(
-                              child: MyTradeCard(
-                                trade: filteredTrades[secondIndex],
-                              ),
-                            )
-                          else
-                            Expanded(child: Container()), // Empty space
-                        ],
+      body: (!isTesting && user == null)
+          ? Center(child: Text("Please login to see your trades"))
+          : Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(12.0),
+                  child: TextField(
+                    controller: searchController,
+                    onChanged: (val) => setState(() => searchText = val),
+                    decoration: InputDecoration(
+                      hintText: 'Search by item name...',
+                      prefixIcon: Icon(Icons.search),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                    );
-                  }),
+                    ),
+                  ),
                 ),
+                // SWITCH LIST BUILDER BASED ON MODE
+                Expanded(
+                  child: isTesting
+                      ? _buildMockMyTrades() // testing123
+                      : _buildFirestoreMyTrades(user!), // Real
+                ),
+              ],
+            ),
+    );
+  }
+
+  // --- Mock My Trades ---
+  Widget _buildMockMyTrades() {
+    // Filter Mock List for a fake user ID 'test_user_uid'
+    var docs = mockListings.where((doc) {
+      return doc['user_id'] == 'test_user_uid' &&
+          (doc['name'] ?? '').toLowerCase().contains(searchText.toLowerCase());
+    }).toList();
+
+    if (docs.isEmpty)
+      return Center(
+        child: Text("You haven't posted any trades yet (Testing)."),
+      );
+
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          children: List.generate((docs.length / 2).ceil(), (rowIndex) {
+            final int firstIndex = rowIndex * 2;
+            final int secondIndex = firstIndex + 1;
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12.0),
+              child: Row(
+                children: [
+                  if (firstIndex < docs.length)
+                    Expanded(child: MyTradeCard(trade: docs[firstIndex])),
+                  SizedBox(width: 12),
+                  if (secondIndex < docs.length)
+                    Expanded(child: MyTradeCard(trade: docs[secondIndex]))
+                  else
+                    Expanded(child: Container()),
+                ],
               ),
+            );
+          }),
+        ),
+      ),
+    );
+  }
+
+  // --- Real My Trades ---
+  Widget _buildFirestoreMyTrades(User user) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('trade_listings')
+          .where('user_id', isEqualTo: user.uid)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) return Center(child: Text('Error'));
+        if (snapshot.connectionState == ConnectionState.waiting)
+          return Center(child: CircularProgressIndicator());
+
+        var docs = snapshot.data!.docs.where((doc) {
+          var data = doc.data() as Map<String, dynamic>;
+          return (data['name'] ?? '').toLowerCase().contains(
+            searchText.toLowerCase(),
+          );
+        }).toList();
+
+        if (docs.isEmpty)
+          return Center(child: Text("You haven't posted any trades yet."));
+
+        return SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Column(
+              children: List.generate((docs.length / 2).ceil(), (rowIndex) {
+                final int firstIndex = rowIndex * 2;
+                final int secondIndex = firstIndex + 1;
+
+                Map<String, dynamic> getData(int index) {
+                  var data = docs[index].data() as Map<String, dynamic>;
+                  data['id'] = docs[index].id;
+                  return data;
+                }
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12.0),
+                  child: Row(
+                    children: [
+                      if (firstIndex < docs.length)
+                        Expanded(
+                          child: MyTradeCard(trade: getData(firstIndex)),
+                        ),
+                      SizedBox(width: 12),
+                      if (secondIndex < docs.length)
+                        Expanded(
+                          child: MyTradeCard(trade: getData(secondIndex)),
+                        )
+                      else
+                        Expanded(child: Container()),
+                    ],
+                  ),
+                );
+              }),
             ),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -905,11 +1182,28 @@ class MyTradeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    String image = trade['image'] ?? '';
+    ImageProvider imageProvider;
+    if (image.startsWith('assets/'))
+      imageProvider = AssetImage(image);
+    else if (image.isNotEmpty)
+      imageProvider = FileImage(File(image));
+    else
+      imageProvider = AssetImage('assets/images/default_cover_photo.png');
+
+    String preferred =
+        (trade['preferred_trades'] as List<dynamic>?)?.join(', ') ?? 'Any';
+
+    int offersCount = trade['offers_count'] ?? 0;
+
     return GestureDetector(
       onTap: () {
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => TradeOfferPage(trade: trade)),
+          MaterialPageRoute(
+            builder: (_) =>
+                TradeOfferPage(listingId: trade['id'], tradeData: trade),
+          ),
         );
       },
       child: Card(
@@ -926,20 +1220,26 @@ class MyTradeCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
                   image: DecorationImage(
-                    image: AssetImage(trade['image']),
+                    image: imageProvider,
                     fit: BoxFit.cover,
+                    onError: (e, s) =>
+                        AssetImage('assets/images/default_cover_photo.png'),
                   ),
                 ),
               ),
               SizedBox(height: 8),
               Text(
-                trade['name'],
+                trade['name'] ?? 'Item',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
               SizedBox(height: 4),
               Text(
-                '${trade['quantity']}, Preferred: ${trade['preferred']}',
+                '${trade['quantity'] ?? ''}, Preferred: $preferred',
                 style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
               SizedBox(height: 8),
               Align(
@@ -951,7 +1251,7 @@ class MyTradeCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    '${trade['offers']} Offers',
+                    '$offersCount Offers',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       color: Colors.black,
@@ -967,25 +1267,29 @@ class MyTradeCard extends StatelessWidget {
   }
 }
 
-// Trade Offer Owner extension from My Trades Page
-
+// Trade Offer Owner (View offers on my item)
 class TradeOfferPage extends StatelessWidget {
-  final Map<String, dynamic> trade;
+  final String listingId;
+  final Map<String, dynamic> tradeData;
 
-  TradeOfferPage({required this.trade});
-
-  final List<Map<String, dynamic>> tradeRequests = [
-    {'name': 'Mango', 'image': 'assets/images/mango.png', 'quantity': '2 kg'},
-    {
-      'name': 'Strawberry',
-      'image': 'assets/images/strawberry.png',
-      'quantity': '1 kg',
-    },
-    {'name': 'Onion', 'image': 'assets/images/onion.png', 'quantity': '½ kg'},
-  ];
+  TradeOfferPage({required this.listingId, required this.tradeData});
 
   @override
   Widget build(BuildContext context) {
+    String image = tradeData['image'] ?? '';
+    ImageProvider imageProvider;
+    if (image.startsWith('assets/'))
+      imageProvider = AssetImage(image);
+    else if (image.isNotEmpty)
+      imageProvider = FileImage(File(image));
+    else
+      imageProvider = AssetImage('assets/images/default_cover_photo.png');
+
+    String preferred =
+        (tradeData['preferred_trades'] as List<dynamic>?)?.join('\n• ') ??
+        'Any';
+    if (preferred != 'Any') preferred = '• $preferred';
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -1017,23 +1321,33 @@ class TradeOfferPage extends StatelessWidget {
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Column(
-                  children: [Image.asset(trade['image'], height: 140)],
+                  children: [
+                    Container(
+                      height: 140,
+                      decoration: BoxDecoration(
+                        image: DecorationImage(
+                          image: imageProvider,
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
               SizedBox(height: 16),
 
-              // Category / Name / Quantity (centered)
+              // Category / Name / Quantity
               Text(
-                "Fruit",
+                "Item",
                 style: TextStyle(fontSize: 16, color: Colors.grey[700]),
               ),
               SizedBox(height: 4),
               Text(
-                trade['name'],
+                tradeData['name'] ?? '',
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
               ),
               SizedBox(height: 4),
-              Text(trade['quantity'], style: TextStyle(fontSize: 16)),
+              Text(tradeData['quantity'] ?? '', style: TextStyle(fontSize: 16)),
               SizedBox(height: 20),
 
               // Product Details
@@ -1048,8 +1362,7 @@ class TradeOfferPage extends StatelessWidget {
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  "Picked at the peak of ripeness, our fresh red tomatoes bring natural sweetness. "
-                  "Bursting with juice, they're perfect for salad.",
+                  "Your item posted for trade.",
                   style: TextStyle(fontSize: 15),
                 ),
               ),
@@ -1067,14 +1380,7 @@ class TradeOfferPage extends StatelessWidget {
               SizedBox(height: 6),
               Align(
                 alignment: Alignment.centerLeft,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text("• Grapes"),
-                    Text("• Apples"),
-                    Text("• Sitaw"),
-                  ],
-                ),
+                child: Text(preferred, style: TextStyle(fontSize: 15)),
               ),
 
               SizedBox(height: 25),
@@ -1089,77 +1395,124 @@ class TradeOfferPage extends StatelessWidget {
               ),
               SizedBox(height: 12),
 
-              Column(
-                children: tradeRequests.map((req) {
-                  return Container(
-                    margin: EdgeInsets.only(bottom: 12),
-                    padding: EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Color(0xFFC3E956),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      children: [
-                        // Image
-                        Container(
-                          width: 50,
-                          height: 50,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(8),
-                            image: DecorationImage(
-                              image: AssetImage(req['image']),
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                        ),
-                        SizedBox(width: 12),
-
-                        // Product Name & Quantity
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                req['name'],
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              Text(
-                                req['quantity'],
-                                style: TextStyle(fontSize: 13),
-                              ),
-                            ],
-                          ),
-                        ),
-
-                        // Accept Button
-                        ElevatedButton(
-                          onPressed: () {},
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white,
-                            foregroundColor: Colors.black,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: Text("Accept"),
-                        ),
-                      ],
-                    ),
-                  );
-                }).toList(),
-              ),
+              // Switch Stream Builder based on mode
+              isTesting
+                  ? _buildMockOffers(context) // testing123
+                  : _buildFirestoreOffers(context), // Real
             ],
           ),
         ),
       ),
     );
   }
+
+  // --- Mock Offers List ---
+  Widget _buildMockOffers(BuildContext context) {
+    if (mockOffers.isEmpty) return Text("No offers yet (Testing).");
+    return Column(
+      children: mockOffers.map((req) {
+        return _buildOfferItem(context, req);
+      }).toList(),
+    );
+  }
+
+  // --- Real Firestore Offers List ---
+  Widget _buildFirestoreOffers(BuildContext context) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('trade_offers')
+          .where('listing_id', isEqualTo: listingId)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) return Text("Error loading offers");
+        if (snapshot.connectionState == ConnectionState.waiting)
+          return CircularProgressIndicator();
+
+        var offers = snapshot.data!.docs;
+        if (offers.isEmpty) return Text("No offers yet.");
+
+        return Column(
+          children: offers.map((doc) {
+            var req = doc.data() as Map<String, dynamic>;
+            return _buildOfferItem(context, req);
+          }).toList(),
+        );
+      },
+    );
+  }
+
+  // --- Shared Offer Item Widget ---
+  Widget _buildOfferItem(BuildContext context, Map<String, dynamic> req) {
+    String reqImage = req['image_path'] ?? '';
+    ImageProvider reqImgProvider;
+    if (reqImage.startsWith('assets/'))
+      reqImgProvider = AssetImage(reqImage);
+    else if (reqImage.isNotEmpty)
+      reqImgProvider = FileImage(File(reqImage));
+    else
+      reqImgProvider = AssetImage('assets/images/default_cover_photo.png');
+
+    return Container(
+      margin: EdgeInsets.only(bottom: 12),
+      padding: EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Color(0xFFC3E956),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          // Image
+          Container(
+            width: 50,
+            height: 50,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              image: DecorationImage(image: reqImgProvider, fit: BoxFit.cover),
+            ),
+          ),
+          SizedBox(width: 12),
+
+          // Product Name & Quantity
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  req['item_name'] ?? 'Unknown',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  req['item_quantity'] ?? '',
+                  style: TextStyle(fontSize: 13),
+                ),
+                Text(
+                  "by: ${req['offered_by_name'] ?? 'User'}",
+                  style: TextStyle(fontSize: 11, color: Colors.grey[800]),
+                ),
+              ],
+            ),
+          ),
+
+          // Accept Button
+          ElevatedButton(
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text("Accept clicked (Logic to be implemented)"),
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: Colors.black,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: Text("Accept"),
+          ),
+        ],
+      ),
+    );
+  }
 }
-
-
-
-/// paghihiwalayin pa ito sa ibat ibang files :3 but ito na muna for working view ng Trades
-/// note ginawa ko po ito gamit web view kaya sorry po if magulo sa part ninyo yung formatting, sorry agad
